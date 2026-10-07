@@ -22,6 +22,29 @@ jobs:
           mkdir project
           unzip -q TapFlow-source.zip -d project
 
+      - name: Patch known Kotlin compile issues
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('project/app/src/main/java/com/tapflow/autoclicker/MainActivity.kt')
+          s=p.read_text()
+          s=s.replace('import androidx.compose.ui.layout.localToWindow','import androidx.compose.ui.layout.positionInWindow')
+          s=s.replace('q.localToWindow(androidx.compose.ui.geometry.Offset.Zero)','q.positionInWindow()')
+          old='@Composable fun AppNav(){var screen by remember{mutableStateOf("home")};var onboard by remember{mutableStateOf(!LocalContext.current.getSharedPreferences("tf",0).getBoolean("onboard",false))};if(onboard){Onboarding{LocalContext.current.getSharedPreferences("tf",0).edit().putBoolean("onboard",true).apply();onboard=false};return};when(screen){"benchmark"->Benchmark{screen="home"};"settings"->SettingsScreen{screen="home"};"profiles"->Profiles{screen="home"};else->Home{screen=it}}}'
+          new='''@Composable fun AppNav(){
+           val context=LocalContext.current
+           val prefs=remember(context){context.getSharedPreferences("tf",0)}
+           var screen by remember{mutableStateOf("home")}
+           var onboard by remember{mutableStateOf(!prefs.getBoolean("onboard",false))}
+           if(onboard){Onboarding{prefs.edit().putBoolean("onboard",true).apply();onboard=false};return}
+           when(screen){"benchmark"->Benchmark{screen="home"};"settings"->SettingsScreen{screen="home"};"profiles"->Profiles{screen="home"};else->Home{screen=it}}
+          }'''
+          if old not in s:
+              raise SystemExit('AppNav pattern not found')
+          s=s.replace(old,new)
+          p.write_text(s)
+          PY
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
